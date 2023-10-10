@@ -1,4 +1,5 @@
 const mongoose = require("mongoose"); // Erase if already required
+const Doctor = require("./Doctor");
 
 // Declare the Schema of the Mongo model
 var reviewSchema = new mongoose.Schema(
@@ -34,5 +35,44 @@ reviewSchema.pre(/^find/, function (next) {
   next();
 });
 
-//Export the model
+// reviewSchema.static.calcAverageRatings = async function (doctorId) {
+//   //this point the current review
+//   const stats = await this.aggregate([
+//     { $match: { doctor: doctorId } },
+//     {
+//       $group: {
+//         _id: "$doctor",
+//         numOfRating: { $sum: 1 },
+//         avgRating: { $avg: "$rating" },
+//       },
+//     },
+//   ]);
+//   console.log(stats);
+// };
+// reviewSchema.post("save", function () {
+//   this.constructor.calcAverageRatings(this.doctor);
+// });
+
+reviewSchema.statics.calcAverageRatings = async function (doctorId) {
+  // Note the use of "statics" instead of "static"
+  // "this" points to the current model (Review)
+  const stats = await this.aggregate([
+    { $match: { doctor: doctorId } },
+    {
+      $group: {
+        _id: "$doctor",
+        numOfRating: { $sum: 1 },
+        avgRating: { $avg: "$rating" },
+      },
+    },
+  ]);
+  await Doctor.findByIdAndUpdate(doctorId, {
+    totalRating: stats[0].numOfRating,
+    avgRating: stats[0].avgRating,
+  });
+};
+reviewSchema.post("save", function () {
+  this.model("Review").calcAverageRatings(this.doctor); // Use "this.model" to access the model
+});
+
 module.exports = mongoose.model("Review", reviewSchema);
